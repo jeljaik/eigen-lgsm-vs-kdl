@@ -4,3 +4,12 @@
 [submodule "libraries/googletest"]
 	path = libraries/googletest
 	url = https://github.com/google/googletest
+[submodule "libraries/eigen_lgsm"]
+	path = libraries/eigen_lgsm
+	url = https://github.com/ocra-recipes/eigen_lgsm
+[submodule "libraries/eigen"]
+	path = libraries/eigen
+	url = https://github.com/RLovelett/eigen
+[submodule "libraries/orocos_kinematics_dynamics"]
+	path = libraries/orocos_kinematics_dynamics
+	url = https://github.com/orocos/orocos_kinematics_dynamics
