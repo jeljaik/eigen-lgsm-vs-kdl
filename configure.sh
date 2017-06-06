@@ -3,6 +3,28 @@
 function cmakeConfigure {
     if [[ $OSTYPE == darwin* ]]; then
         echo "-G Xcode"
+    else
+      echo ""
+    fi
+}
+
+function build-func {
+    if [[ $OSTYPE == darwin* ]]; then
+        eval "xcodebuild -j 8"
+    else
+      if [[ $OSTYPE == linux-gnu ]]; then
+        eval "make -j8"
+      fi
+    fi
+}
+
+function install-func {
+    if [[ $OSTYPE == darwin* ]]; then
+        eval "xcodebuild -j 8 -target install"
+    else
+      if [[ $OSTYPE == linux-gnu ]]; then
+        eval "make install -j8"
+      fi
     fi
 }
 
@@ -33,12 +55,12 @@ function installLib {
     if [ "$2" = 4 ]; then
         echo "I think second argument is 4"
         cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../../install  ../
-        make install -j 6
+        install-func
         cd ../../../../
     fi
     if [ -z "$2" ]; then
         cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../install  ../
-        make install -j 6
+        install-func
         cd ../../../ # Go back to project source
     fi
 }
@@ -72,6 +94,6 @@ installLib orocos_kinematics_dynamics/orocos_kdl 4
 # Configure and build project
 redPrint " -- Configuring project"
 cd build
-XCODEOPTION = "$(cmakeConfigure)"
+XCODEOPTION="$(cmakeConfigure)"
 cmake ${XCODEOPTION} ../
-xcodebuild -j 8 -configuration Release
+build-func

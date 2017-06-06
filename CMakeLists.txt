@@ -16,6 +16,13 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 set(Eigen_ROOT_DIR ${PROJECT_SOURCE_DIR}/libraries/eigen)
 message("Local Eigen_ROOT_DIR is: " ${Eigen_ROOT_DIR})
 
+# This is required for Google Tests
+find_package(Threads REQUIRED)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+  add_definitions(-Wall -ansi -Wno-deprecated -pthread)
+endif()
+
 # Find Eigen, Eigen-LGSM, Google Test, Orocos KDL
 find_package(Eigen REQUIRED)
 if (Eigen_FOUND)
@@ -33,7 +40,20 @@ include_directories(${Eigen_INCLUDE_DIRS}
 
 add_executable(kdlVsLgsm src/main.cpp)
 
+# if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  set(kdl-libs ${CMAKE_SOURCE_DIR}/install/lib/liborocos-kdl.so)
+endif()
+
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  set(kdl-libs ${CMAKE_SOURCE_DIR}/install/lib/liborocos-kdl.dylib)
+endif()
+
+
 # Linking against gtest libraries. Too lazy to write a proper FindGTest
 target_link_libraries(kdlVsLgsm ${CMAKE_SOURCE_DIR}/install/lib/libgtest.a
                                 ${CMAKE_SOURCE_DIR}/install/lib/libgtest_main.a
-                            ${CMAKE_SOURCE_DIR}/install/lib/liborocos-kdl.dylib)
+                                ${kdl-libs}
+                                ${CMAKE_THREAD_LIBS_INIT})
