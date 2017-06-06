@@ -28,7 +28,8 @@ endif()
 #  Eigen_VERSION - eigen version
 
 include_directories(${Eigen_INCLUDE_DIRS}
-                     install/include)
+                    install/include
+                    install/include/eigen_lgsm)
 
 add_executable(kdlVsLgsm src/main.cpp)
 

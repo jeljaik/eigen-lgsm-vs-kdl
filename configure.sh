@@ -1,5 +1,11 @@
 #!/bin/bash
-########### functions ###########################################
+########### functions ##########################################################
+function cmakeConfigure {
+    if [[ $OSTYPE == darwin* ]]; then
+        echo "-G Xcode"
+    fi
+}
+
 # Directory existence function
 function dirExists {
     if [ ! -d "$1" ];then
@@ -13,18 +19,25 @@ function dirExists {
 # Install library
 function installLib {
     redPrint " -- Installing $1"
+    XCODEOPTION="$(cmakeConfigure)"
+    echo "${XCODEOPTION}"
     cd ./libraries/$1
     dirExists build
     cd build
-    cmake -DCMAKE_INSTALL_PREFIX=../../../install  ../
+    if [ "$1" == googletest ]; then
+        redPrint "Building tests by Google Test by default"
+        cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../install -Dgtest_build_tests=ON ../
+    else
+        cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../install  ../
+    fi
     if [ "$2" = 4 ]; then
         echo "I think second argument is 4"
-        cmake -DCMAKE_INSTALL_PREFIX=../../../../install  ../
+        cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../../install  ../
         make install -j 6
         cd ../../../../
     fi
     if [ -z "$2" ]; then
-        cmake -DCMAKE_INSTALL_PREFIX=../../../install  ../
+        cmake ${XCODEOPTION} -DCMAKE_INSTALL_PREFIX=../../../install  ../
         make install -j 6
         cd ../../../ # Go back to project source
     fi
@@ -36,7 +49,7 @@ NC='\033[0m' # No Color
 function redPrint {
     printf "${RED}$1${NC}\n"
 }
-####################################################################
+################################################################################
 
 # Check existence of build directory
 dirExists build
@@ -59,5 +72,6 @@ installLib orocos_kinematics_dynamics/orocos_kdl 4
 # Configure and build project
 redPrint " -- Configuring project"
 cd build
-cmake ../
-make -j 8
+XCODEOPTION = "$(cmakeConfigure)"
+cmake ${XCODEOPTION} ../
+xcodebuild -j 8 -configuration Release
