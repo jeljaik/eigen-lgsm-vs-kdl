@@ -40,6 +40,9 @@ namespace {
         KDL::Frame kfr1;
         // LGSM frames
         Eigen::Displacementd efr1;
+        
+        // KDL Twists
+        KDL::Twist kt1;
 
         KDLvsLGSMTest() {
             // You can do set-up work for each test here.
@@ -64,13 +67,22 @@ namespace {
             ev2 << 1.0,2.0,3.0;
             ev3 = Eigen::Vector3d(ev2);
             ev4 = Eigen::Vector3d::Zero(3);
+            
+            kt1 = KDL::Twist::Zero();
+            kt1(0) = 1.0;
 
         }
 
         // Compares (asserts) two equal vectors. KDL vs Eigen
-        void assertEqualVectors(KDL::Vector kv, Eigen::Vector3d ev) {
+        void assertEqual3dVectors(KDL::Vector kv, Eigen::Vector3d ev) {
             for (size_t i = 0; i < 3; i++) {
                 ASSERT_NEAR(kv(i),ev(i),ABS_ERROR);
+            }
+        }
+        
+        void assertEqualKDLTwists(KDL::Twist &kt1, KDL::Twist &kt2) {
+            for (size_t i = 0; i < 6; i++) {
+                ASSERT_EQ(kt1(i), kt2(i));
             }
         }
 
@@ -103,7 +115,7 @@ namespace {
             kdlH.Make4x4(eigenH.data());
             // Now compare two frames with KDL::Frame::Equal()
             EXPECT_TRUE(KDL::Equal(kdl_frame, kdlH));
-            assertEqualVectors(kdl_frame.p, eigen_frame.getTranslation());
+            assertEqual3dVectors(kdl_frame.p, eigen_frame.getTranslation());
         }
 
 
@@ -126,7 +138,7 @@ namespace {
             EXPECT_NEAR(tmpQuat(3), eigen_frame.qw(), ABS_ERROR) << "w differs in quaternion comparisons between two frames";
 
             // Compare position
-            assertEqualVectors(kdl_frame.p, eigen_frame.getTranslation());
+            assertEqual3dVectors(kdl_frame.p, eigen_frame.getTranslation());
         }
 
 
@@ -137,18 +149,64 @@ namespace {
 
     };
 
+    
+    /**
+     Addition between an Eigen Vector and a KDL Twist
+
+     @param eigVector Eigen Vector. Should be of size 6x1.
+     @param kdlTwist KDL Twist.
+     @return Resulting addition of the two twists.
+     */
+    template <typename Derived>
+    KDL::Twist operator+(const Eigen::DenseBase<Derived> &eigVector, const KDL::Twist &kdlTwist) {
+        EXPECT_EQ(eigVector.rows(), 6);
+        KDL::Twist kdlTwist1;
+        kdlTwist1(0) = kdlTwist(0) + eigVector(0);
+        kdlTwist1(1) = kdlTwist(1) + eigVector(1);
+        kdlTwist1(2) = kdlTwist(2) + eigVector(2);
+        kdlTwist1(3) = kdlTwist(3) + eigVector(3);
+        kdlTwist1(4) = kdlTwist(4) + eigVector(4);
+        kdlTwist1(5) = kdlTwist(5) + eigVector(5);
+        return kdlTwist1;
+    }
+    
+    
+    /**
+     Multiplication operator between Eigen Matrices and KDL Twists.
+
+     @param eigMatrix Eigen Matrix. Must have 6 columns.
+     @param kdlTwist KDL Twist.
+     @return Result of the multiplication as a KDL Twist.
+     */
+    template <typename Derived>
+    KDL::Twist operator*(const Eigen::MatrixBase<Derived> &eigMatrix, const KDL::Twist &kdlTwist) {
+        EXPECT_EQ(eigMatrix.cols(), 6);
+        Eigen::VectorXd tmpEig(6);
+        tmpEig(0) = kdlTwist(0);
+        tmpEig(1) = kdlTwist(1);
+        tmpEig(2) = kdlTwist(2);
+        tmpEig(3) = kdlTwist(3);
+        tmpEig(4) = kdlTwist(4);
+        tmpEig(5) = kdlTwist(5);
+        
+        Eigen::VectorXd res(6);
+        KDL::Twist out = KDL::Twist(KDL::Vector(res(0), res(1), res(2)), KDL::Vector(res(3), res(4), res(5)));
+        return out;
+    }
+    
+
     // Testing that the four vectors created in KDL and Eigen have the same contents.
-    TEST_F(KDLvsLGSMTest, assertEqualVectors) {
-        assertEqualVectors(kv1,ev1);
-        assertEqualVectors(kv2,ev2);
-        assertEqualVectors(kv3,ev3);
-        assertEqualVectors(kv4,ev4);
+    TEST_F(KDLvsLGSMTest, assertEqual3dVectors) {
+        assertEqual3dVectors(kv1,ev1);
+        assertEqual3dVectors(kv2,ev2);
+        assertEqual3dVectors(kv3,ev3);
+        assertEqual3dVectors(kv4,ev4);
     }
 
     TEST_F(KDLvsLGSMTest, doubleVectorOperators) {
-        assertEqualVectors(2*kv2, 2*ev2);
-        assertEqualVectors(kv1*2, ev1*2);
-        assertEqualVectors(kv1/2, ev1/2);
+        assertEqual3dVectors(2*kv2, 2*ev2);
+        assertEqual3dVectors(kv1*2, ev1*2);
+        assertEqual3dVectors(kv1/2, ev1/2);
     }
 
     // Test of vector vector operators, such as addition, substraction,
@@ -157,22 +215,22 @@ namespace {
     TEST_F(KDLvsLGSMTest, vectorVectorOperators) {
 
         // Addition and substraction
-        assertEqualVectors(kv1 + kv2, ev1 + ev2);
-        assertEqualVectors(kv1 - kv2, ev1 - ev2);
+        assertEqual3dVectors(kv1 + kv2, ev1 + ev2);
+        assertEqual3dVectors(kv1 - kv2, ev1 - ev2);
 
         // Operator += and -=
-        assertEqualVectors(kv1+=kv2, ev1+=ev2);
-        assertEqualVectors(kv1-=kv2, ev1-=ev2);
+        assertEqual3dVectors(kv1+=kv2, ev1+=ev2);
+        assertEqual3dVectors(kv1-=kv2, ev1-=ev2);
 
         // Cross and dot product
-        assertEqualVectors(kv1*kv2, ev1.cross(ev2));
+        assertEqual3dVectors(kv1*kv2, ev1.cross(ev2));
         ASSERT_EQ(dot(kv1,kv2), ev1.dot(ev2));
 
         // Sign inversion
-        assertEqualVectors(-kv1, -ev1);
+        assertEqual3dVectors(-kv1, -ev1);
         KDL::Vector tmp = kv1;
         tmp.ReverseSign();
-        assertEqualVectors(tmp, -ev1);
+        assertEqual3dVectors(tmp, -ev1);
 
         // Norm and normalization
         tmp.Zero();
@@ -180,12 +238,12 @@ namespace {
         tmp.Normalize(); // KDL normalizes the original vector but the
         // return is the actual norm, while Eigen does
         // not change the original vector
-        assertEqualVectors(tmp, ev3.normalized());
+        assertEqual3dVectors(tmp, ev3.normalized());
         ASSERT_EQ(tmp.Norm(), ev3.normalized().norm());
 
         // Setting your vector to zero
         SetToZero(kv1);
-        assertEqualVectors(kv1, ev1.setZero());
+        assertEqual3dVectors(kv1, ev1.setZero());
     }
 
     TEST_F(KDLvsLGSMTest, frames) {
@@ -199,11 +257,51 @@ namespace {
         //    std::cout << "[KDL] - last row is position: \n" << kfr1 << std::endl;
         assertEqualFrames1(kfr1, efr1);
         assertEqualFrames2(kfr1,efr1);
-        
+
         // Frame composition
+    }
+
+    TEST_F(KDLvsLGSMTest, framesComposition) {
+        // F_A_C = F_A_B * F_B_C;
+        // First with KDL
+        KDL::Frame F_A_B(KDL::Rotation::RPY(0, M_PI/2, 0));
+        KDL::Frame F_B_C(KDL::Rotation::RPY(M_PI/4, 0, 0));
+        KDL::Frame F_A_C = F_A_B * F_B_C;
+
+        // Then with LGSM
+
+    }
+
+    TEST_F(KDLvsLGSMTest, additionOperator) {
+        // First create an Eigen Twist equal to kt1
+        Eigen::VectorXd et1(6);
+        et1.setZero();
+        et1(0) = 1.0;
+        // Add KDL Twist and Eigen Vector
+        KDL::Twist sumResult = et1 + kt1;
+        // The sum of the first two components should be 2
+        ASSERT_EQ(sumResult(0), 2);
         
+        // Testing with the subcolumn of 6-dimensional matrix
+        Eigen::MatrixXd mat(6,2);
+        mat.setZero();
+        mat(0,0) = 1;
+        sumResult = mat.leftCols(1) + kt1;
+        ASSERT_EQ(sumResult(0),2);
+        
+        // Testing with the result of a multiplication between an Eigen matrix and an Eigen Vector
+        Eigen::Vector2d tmp; tmp << 1, 0;
+        sumResult = mat*tmp + kt1;
+        ASSERT_EQ(sumResult(0),2);
     }
     
+    TEST_F(KDLvsLGSMTest, multiplicationOperator) {
+        // First create 6x6 Eigen Matrix
+        Eigen::MatrixXd mat = Eigen::MatrixXd::Identity(6, 6);
+        // Multiply by member KDL twist
+        KDL::Twist res = mat*kt1;
+        assertEqualKDLTwists(kt1, res);
+    }
 
 } // namespace
 int main(int argc, char **argv) {
