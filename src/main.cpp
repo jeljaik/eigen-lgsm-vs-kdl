@@ -6,6 +6,10 @@
 #include "Eigen/Dense"
 #include "Eigen/Geometry"
 #include "Eigen/Lgsm"
+#include <array>
+#include <iostream>
+#include <cmath>
+
 
 #define ABS_ERROR 1e-5
 namespace {
@@ -40,7 +44,7 @@ namespace {
         KDL::Frame kfr1;
         // LGSM frames
         Eigen::Displacementd efr1;
-        
+
         // KDL Twists
         KDL::Twist kt1;
 
@@ -67,7 +71,7 @@ namespace {
             ev2 << 1.0,2.0,3.0;
             ev3 = Eigen::Vector3d(ev2);
             ev4 = Eigen::Vector3d::Zero(3);
-            
+
             kt1 = KDL::Twist::Zero();
             kt1(0) = 1.0;
 
@@ -79,10 +83,25 @@ namespace {
                 ASSERT_NEAR(kv(i),ev(i),ABS_ERROR);
             }
         }
-        
+
         void assertEqualKDLTwists(KDL::Twist &kt1, KDL::Twist &kt2) {
             for (size_t i = 0; i < 6; i++) {
                 ASSERT_EQ(kt1(i), kt2(i));
+            }
+        }
+        
+        
+        /**
+         Compares two vectors, for the moment they should be of the same size.
+
+         @param eigVec1 First vector.
+         @param eigVec2 Second vector.
+         */
+        template <typename Derived1, typename Derived2>
+        void assertEqualEigenVectors(const Eigen::MatrixBase<Derived1>& eigVec1, const Eigen::MatrixBase<Derived2>& eigVec2)
+        {
+            for (int i=0;i<3;i++) {
+                ASSERT_NEAR(eigVec1(i),eigVec2(i), ABS_ERROR);
             }
         }
 
@@ -141,6 +160,19 @@ namespace {
             assertEqual3dVectors(kdl_frame.p, eigen_frame.getTranslation());
         }
 
+        /**
+         Returns pointer to data stored in KDL Twist. Well, actually to the copy of this data.
+
+         @param kdlTwist Input KDL Twist.
+         @return Pointer to data.
+         */
+        double* getTwistData(const KDL::Twist &kdlTwist) {
+            std::vector<double> outTwist(3);
+            outTwist.assign(&kdlTwist.vel.data[0], &kdlTwist.vel.data[0] + 3);
+            outTwist.insert(outTwist.end(), &kdlTwist.rot.data[0], &kdlTwist.rot.data[0] + 3);
+            return outTwist.data();
+        }
+
 
         virtual void TearDown() {
             // Code here will be called immediately after each test (right
@@ -149,7 +181,7 @@ namespace {
 
     };
 
-    
+
     /**
      Addition between an Eigen Vector and a KDL Twist
 
@@ -169,8 +201,8 @@ namespace {
         kdlTwist1(5) = kdlTwist(5) + eigVector(5);
         return kdlTwist1;
     }
-    
-    
+
+
     /**
      Multiplication operator between Eigen Matrices and KDL Twists.
 
@@ -188,12 +220,31 @@ namespace {
         tmpEig(3) = kdlTwist(3);
         tmpEig(4) = kdlTwist(4);
         tmpEig(5) = kdlTwist(5);
-        
+
         Eigen::VectorXd res(6);
+        res = eigMatrix * tmpEig;
         KDL::Twist out = KDL::Twist(KDL::Vector(res(0), res(1), res(2)), KDL::Vector(res(3), res(4), res(5)));
         return out;
     }
     
+    
+    /**
+     Implements the capitalized logarithmic map, which directly provides the anlge phi and axis u of rotation in cartesian 3D space, in the form u*phi. It returns only the vector coefficients of the resulting quaternion (to comply with EigenLGSM).
+
+     @param[in] q Input quaternion. Use a fixed-sized Eigen vector, e.g. Eigen::Vector4d.
+     @param[out] log Three-dimensional logarithm of the input quaternion. Use a fixed-size Eigen vector, e.g. Eigen::Vector3d.
+     */
+    template <typename Derived1, typename Derived2>
+    void quaternionLog(const Eigen::MatrixBase<Derived1>& q, Eigen::MatrixBase<Derived2>& log) {
+        Eigen::Vector4d tmp;
+        // As done in http://www.iri.upc.edu/people/jsola/JoanSola/objectes/notes/kinematics.pdf
+        // Page 21: The logarithmic maps
+        double qv_norm = q.head(3).norm();
+        double qw = q(3);
+        double phi = 2*std::atan2(qv_norm, qw);
+        tmp = (phi/qv_norm)*q;
+        log = tmp.head(3);
+    }
 
     // Testing that the four vectors created in KDL and Eigen have the same contents.
     TEST_F(KDLvsLGSMTest, assertEqual3dVectors) {
@@ -281,28 +332,76 @@ namespace {
         KDL::Twist sumResult = et1 + kt1;
         // The sum of the first two components should be 2
         ASSERT_EQ(sumResult(0), 2);
-        
+
         // Testing with the subcolumn of 6-dimensional matrix
         Eigen::MatrixXd mat(6,2);
         mat.setZero();
         mat(0,0) = 1;
         sumResult = mat.leftCols(1) + kt1;
         ASSERT_EQ(sumResult(0),2);
-        
+
         // Testing with the result of a multiplication between an Eigen matrix and an Eigen Vector
         Eigen::Vector2d tmp; tmp << 1, 0;
         sumResult = mat*tmp + kt1;
         ASSERT_EQ(sumResult(0),2);
     }
-    
+
     TEST_F(KDLvsLGSMTest, multiplicationOperator) {
         // First create 6x6 Eigen Matrix
         Eigen::MatrixXd mat = Eigen::MatrixXd::Identity(6, 6);
         // Multiply by member KDL twist
         KDL::Twist res = mat*kt1;
         assertEqualKDLTwists(kt1, res);
+        // Testing multiplication with a block
+        KDL::Twist tmp = mat.leftCols(6)*kt1;
+        assertEqualKDLTwists(kt1, tmp);
     }
 
+    TEST_F(KDLvsLGSMTest, twistData) {
+        double* twistData = getTwistData(kt1);
+//        for (int i=0; i<=6; i++)
+//            std::cout << twistData[i] << std::endl;
+        EXPECT_EQ(twistData[0], kt1(0));
+    }
+
+    TEST_F(KDLvsLGSMTest, Rotations3D) {
+        Eigen::MatrixXd H_eig(4,4); H_eig.setZero();
+        Eigen::VectorXd H(16);
+        KDL::Frame H_kdl;
+        // Rotate around x by 45 degrees
+        H_kdl.M.DoRotX(45);
+        H_kdl.Make4x4(H.data());
+//        std::cout << "H_kdl: \n" << H_kdl << std::endl;
+        H_eig = Eigen::Map<Eigen::MatrixXd>(H.data(),4,4);
+        H_eig.transposeInPlace();
+//        std::cout << "Corresponding Eigen Matrix\n" << H_eig << std::endl;
+        //TODO: Properly compare the KDL frame and the corresponding homogeneous matrix.
+    }
+    
+    TEST_F(KDLvsLGSMTest, quaternionLog) {
+        KDL::Frame H_kdl;
+        // Rotation around x by 45 degrees
+        H_kdl.M.DoRotX(45);
+        H_kdl.M.DoRotY(30);
+        // Get the equivalent quaternion in this order [x y z w]
+        Eigen::Vector4d quat;
+        H_kdl.M.GetQuaternion(quat(0), quat(1), quat(2), quat(3));
+        Eigen::Vector3d log;
+        quaternionLog(quat, log);
+        std::cout << "My Log: " << log.transpose() << std::endl;
+        // Build the same quaternion with LGSM
+        Eigen::Displacementd::Rotation3D quat_lgsm;
+        quat_lgsm.x() = quat(0);
+        quat_lgsm.y() = quat(1);
+        quat_lgsm.z() = quat(2);
+        quat_lgsm.w() = quat(3);
+        std::cout << "LGSM Log: " << quat_lgsm.log().get().transpose() << std::endl;
+        Eigen::Vector3d tmp; tmp << quat_lgsm.log().get().operator()(0),
+                                       quat_lgsm.log().get().operator()(1),
+                                       quat_lgsm.log().get().operator()(2);
+        assertEqualEigenVectors(log, tmp);
+    }
+    
 } // namespace
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
